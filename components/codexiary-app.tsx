@@ -15,6 +15,7 @@ import {
   Lightbulb,
   Menu,
   Mic,
+  NotebookPen,
   PenLine,
   Plus,
   Search,
@@ -435,99 +436,92 @@ export default function CodexiaryApp() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
-        <Brand />
-
-        <nav className="side-nav">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                className={`nav-button ${view === item.id ? "active" : ""}`}
-                onClick={() => setView(item.id)}
-              >
-                <Icon size={18} strokeWidth={1.9} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="weekly-card">
-            <div className="weekly-icon">
-              <Zap size={16} />
-            </div>
-            <div>
-              <strong>{weekEntries.length} moments</strong>
-              <span>captured this week</span>
-            </div>
-          </div>
-          <div className="profile-chip">
-            <div className="avatar">OI</div>
-            <div>
-              <strong>Ifeoluwa</strong>
-              <span>Builder workspace</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div className="mobile-brand">
+      <header className="global-nav">
+        <div className="global-nav-inner">
+          <button
+            className="brand-button"
+            onClick={() => setView("dashboard")}
+            aria-label="Go to Codexiary home"
+          >
             <Brand compact />
-          </div>
-          <div>
-            <p className="eyebrow">PERSONAL CONTENT OS</p>
-            <h1>{displayName}</h1>
-          </div>
-          <div className="top-actions">
-            <button
-              className="ghost-button desktop-only"
-              onClick={() => setView("journal")}
-            >
-              <Search size={17} />
-              Search
-            </button>
-            <button
-              className="primary-button desktop-only"
-              onClick={() => setView("capture")}
-            >
-              <Plus size={17} />
-              Capture
-            </button>
-            <button
-              className="icon-button mobile-menu"
-              onClick={() => setMobileNav((open) => !open)}
-              aria-label="Open navigation"
-            >
-              {mobileNav ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
-        </header>
+          </button>
 
-        {mobileNav && (
-          <div className="mobile-nav">
+          <nav className="global-links desktop-nav" aria-label="Primary navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    setView(item.id);
-                    setMobileNav(false);
-                  }}
+                  className={view === item.id ? "active" : ""}
+                  onClick={() => setView(item.id)}
                 >
-                  <Icon size={17} />
-                  {item.label}
+                  <Icon size={15} strokeWidth={1.8} />
+                  <span>{item.label}</span>
                 </button>
               );
             })}
-          </div>
-        )}
+          </nav>
 
+          <div className="global-actions">
+            <button
+              className="global-icon-button desktop-nav"
+              onClick={() => setView("journal")}
+              aria-label="Search journal"
+            >
+              <Search size={17} strokeWidth={1.8} />
+            </button>
+            <button
+              className="global-icon-button mobile-menu"
+              onClick={() => setMobileNav((open) => !open)}
+              aria-label="Open navigation"
+            >
+              {mobileNav ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="subnav">
+        <div className="subnav-inner">
+          <div className="subnav-title">
+            <span>Codexiary</span>
+            <small>{displayName}</small>
+          </div>
+
+          <div className="subnav-actions">
+            <span className="week-note desktop-nav">
+              {weekEntries.length} {weekEntries.length === 1 ? "moment" : "moments"} this week
+            </span>
+            <button className="primary-button" onClick={() => setView("capture")}>
+              <Plus size={16} strokeWidth={2} />
+              Capture
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {mobileNav && (
+        <div className="mobile-nav">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={view === item.id ? "active" : ""}
+                onClick={() => {
+                  setView(item.id);
+                  setMobileNav(false);
+                }}
+              >
+                <Icon size={17} strokeWidth={1.8} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <section className="workspace">
         <div className="page">
           {view === "dashboard" && (
             <Dashboard
@@ -610,11 +604,7 @@ export default function CodexiaryApp() {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`brand ${compact ? "compact" : ""}`}>
-      <div className="brand-mark">
-        <span />
-        <span />
-        <span />
-      </div>
+      <NotebookPen size={19} strokeWidth={1.8} aria-hidden="true" />
       <div>
         <strong>Codexiary</strong>
         {!compact && <small>Capture the work. Keep the story.</small>}
@@ -664,33 +654,44 @@ function Dashboard({
 
   return (
     <>
-      <section className="hero">
-        <div>
-          <p className="eyebrow accent">YOUR WORK IS ALREADY THE CONTENT</p>
+      <section className="hero product-tile product-tile-light">
+        <div className="tile-inner hero-inner">
+          <div className="hero-mark" aria-hidden="true">
+            <NotebookPen size={52} strokeWidth={1.35} />
+          </div>
+          <p className="eyebrow accent">PERSONAL KNOWLEDGE → USEFUL STORIES</p>
           <h2>
-            Capture the moment.
+            Capture the work.
             <br />
-            <span>Keep the lesson.</span>
+            Keep the story.
           </h2>
           <p className="hero-copy">
-            You should not have to remember on Saturday what was worth sharing on
-            Tuesday. Drop the rough thought here. Codexiary keeps the trail.
+            Codexiary keeps a quiet record of what you build, learn, attend, and
+            figure out — then helps you turn the strongest moments into thoughtful
+            LinkedIn posts.
           </p>
-        </div>
-        <div className="hero-orbit" aria-hidden="true">
-          <div className="orbit-ring ring-one" />
-          <div className="orbit-ring ring-two" />
-          <div className="orbit-core">
-            <BrainCircuit size={28} />
+          <div className="hero-actions">
+            <button className="primary-button large" onClick={() => setView("capture")}>
+              Capture a moment
+            </button>
+            <button className="secondary-pill" onClick={() => setView("journal")}>
+              Open journal <ArrowRight size={16} />
+            </button>
           </div>
-          <span className="orbit-dot dot-one" />
-          <span className="orbit-dot dot-two" />
-          <span className="orbit-dot dot-three" />
         </div>
       </section>
 
-      <section className="dashboard-grid">
-        <div className="stack">
+      <section className="product-tile product-tile-parchment capture-showcase">
+        <div className="tile-inner">
+          <div className="section-copy centered-copy">
+            <p className="eyebrow">QUICK CAPTURE</p>
+            <h3>Write it while it is still fresh.</h3>
+            <p>
+              A rough note is enough. Add where it came from, save it, and let
+              Codexiary organize the memory for later.
+            </p>
+          </div>
+
           <QuickCapture
             raw={raw}
             setRaw={setRaw}
@@ -709,7 +710,7 @@ function Dashboard({
             <StatCard
               icon={BookOpen}
               value={entries.length}
-              label="total moments"
+              label="moments kept"
               detail="your growing evidence trail"
             />
             <StatCard
@@ -726,20 +727,26 @@ function Dashboard({
             />
           </div>
         </div>
+      </section>
 
-        <div className="panel radar-panel">
-          <div className="panel-heading">
+      <section className="product-tile product-tile-dark radar-showcase">
+        <div className="tile-inner">
+          <div className="dark-section-heading">
             <div>
-              <p className="eyebrow">CONTENT RADAR</p>
-              <h3>What may be worth sharing</h3>
+              <p className="eyebrow dark-eyebrow">CONTENT RADAR</p>
+              <h3>The best post may already be in your week.</h3>
+              <p>
+                Codexiary surfaces moments with enough substance to revisit. You
+                choose what deserves to become public.
+              </p>
             </div>
-            <button className="text-button" onClick={() => setView("content")}>
-              See all <ArrowRight size={15} />
+            <button className="dark-link" onClick={() => setView("content")}>
+              Open content studio <ArrowRight size={17} />
             </button>
           </div>
 
           {contentIdeas.length ? (
-            <div className="radar-list">
+            <div className="radar-grid">
               {contentIdeas.slice(0, 3).map(({ entry, score }) => (
                 <button
                   className="radar-item"
@@ -751,13 +758,14 @@ function Dashboard({
                 >
                   <div className="score-ring">{score}</div>
                   <div>
-                    <strong>{entry.hook}</strong>
-                    <span>
+                    <span className="radar-meta">
                       {entry.category}
                       {entry.project ? ` · ${entry.project}` : ""}
                     </span>
+                    <strong>{entry.hook}</strong>
+                    <p>{entry.angle}</p>
                   </div>
-                  <ChevronRight size={17} />
+                  <ChevronRight size={18} />
                 </button>
               ))}
             </div>
@@ -767,51 +775,53 @@ function Dashboard({
         </div>
       </section>
 
-      <section className="panel recent-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">RECENT TRAIL</p>
-            <h3>Your latest moments</h3>
-          </div>
-          <button className="text-button" onClick={() => setView("journal")}>
-            Open journal <ArrowRight size={15} />
-          </button>
-        </div>
-
-        {entries.length ? (
-          <div className="recent-grid">
-            {entries.slice(0, 4).map((entry) => (
-              <article className="entry-card" key={entry.id}>
-                <div className="entry-meta">
-                  <CategoryIcon category={entry.category} />
-                  <span>{entry.category}</span>
-                  <i />
-                  <span>{timeAgo(entry.createdAt)}</span>
-                </div>
-                <h4>{entry.summary}</h4>
-                <div className="tags">
-                  {entry.topics.slice(0, 3).map((topic) => (
-                    <span key={topic}>{topic}</span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon">
-              <PenLine size={24} />
+      <section className="product-tile product-tile-light recent-showcase">
+        <div className="tile-inner">
+          <div className="section-copy split-heading">
+            <div>
+              <p className="eyebrow">RECENT TRAIL</p>
+              <h3>Your work, remembered.</h3>
             </div>
-            <h4>Your trail starts with one rough note.</h4>
-            <p>
-              Capture something you built, learned, attended, struggled with, or
-              changed your mind about.
-            </p>
-            <button className="primary-button" onClick={() => setView("capture")}>
-              Capture your first moment
+            <button className="text-button" onClick={() => setView("journal")}>
+              Open journal <ArrowRight size={16} />
             </button>
           </div>
-        )}
+
+          {entries.length ? (
+            <div className="recent-grid">
+              {entries.slice(0, 4).map((entry) => (
+                <article className="entry-card" key={entry.id}>
+                  <div className="entry-meta">
+                    <CategoryIcon category={entry.category} />
+                    <span>{entry.category}</span>
+                    <i />
+                    <span>{timeAgo(entry.createdAt)}</span>
+                  </div>
+                  <h4>{entry.summary}</h4>
+                  <div className="tags">
+                    {entry.topics.slice(0, 3).map((topic) => (
+                      <span key={topic}>{topic}</span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">
+                <PenLine size={24} />
+              </div>
+              <h4>Your trail starts with one rough note.</h4>
+              <p>
+                Capture something you built, learned, attended, struggled with,
+                or changed your mind about.
+              </p>
+              <button className="primary-button" onClick={() => setView("capture")}>
+                Capture your first moment
+              </button>
+            </div>
+          )}
+        </div>
       </section>
     </>
   );
