@@ -337,7 +337,8 @@ export default function CodexiaryApp() {
     setView("dashboard");
   }
 
-  async function makeDraft(entry: Entry) {
+  async function makeDraft(entry: Entry, toneOverride?: string) {
+    const selectedTone = toneOverride ?? tone;
     setActiveEntry(entry);
     setDrafting(true);
     setDraft("");
@@ -346,11 +347,11 @@ export default function CodexiaryApp() {
       const data = await callAI({
         action: "draft",
         entry,
-        tone,
+        tone: selectedTone,
       });
       setDraft(data.result.content);
     } catch {
-      setDraft(localDraft(entry, tone));
+      setDraft(localDraft(entry, selectedTone));
     } finally {
       setDrafting(false);
     }
@@ -572,6 +573,7 @@ export default function CodexiaryApp() {
               setSearch={setSearch}
               deleteEntry={deleteEntry}
               makeDraft={makeDraft}
+              setView={setView}
             />
           )}
 
@@ -996,12 +998,14 @@ function JournalPage({
   setSearch,
   deleteEntry,
   makeDraft,
+  setView,
 }: {
   entries: Entry[];
   search: string;
   setSearch: (value: string) => void;
   deleteEntry: (id: string) => void;
-  makeDraft: (entry: Entry) => void;
+  makeDraft: (entry: Entry, toneOverride?: string) => void;
+  setView: (view: View) => void;
 }) {
   return (
     <section>
@@ -1071,7 +1075,10 @@ function JournalPage({
                   <div>
                     <button
                       className="ghost-button"
-                      onClick={() => makeDraft(entry)}
+                      onClick={() => {
+                        makeDraft(entry);
+                        setView("content");
+                      }}
                     >
                       <Sparkles size={15} /> Draft
                     </button>
@@ -1117,7 +1124,7 @@ function ContentStudio({
   draft: string;
   setDraft: (value: string) => void;
   drafting: boolean;
-  makeDraft: (entry: Entry) => void;
+  makeDraft: (entry: Entry, toneOverride?: string) => void;
   copyDraft: () => void;
 }) {
   return (
@@ -1191,7 +1198,7 @@ function ContentStudio({
                 onClick={() => {
                   setTone(option);
                   if (activeEntry) {
-                    window.setTimeout(() => makeDraft(activeEntry), 0);
+                    makeDraft(activeEntry, option);
                   }
                 }}
               >
