@@ -89,7 +89,6 @@ function makeServer(account: Account) {
       title: "Connected Codexiary account",
       description: "Identify the Codexiary account linked to ChatGPT.",
       inputSchema: z.object({}),
-      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
       _meta: { "openai/profile": true, securitySchemes: auth },
     },
