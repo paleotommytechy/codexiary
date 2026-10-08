@@ -333,11 +333,11 @@ export default function CodexiaryApp() {
   useEffect(() => {
     const db = getBrowserSupabase();
     if (!db) return;
-    void db.auth.getUser().then(({ data }) => {
+    void db.auth.getUser().then(({ data }: { data: { user: { id: string; email?: string } | null } }) => {
       setCloudUser(data.user?.id || null);
       setCloudEmail(data.user?.email || "");
     });
-    const { data: listener } = db.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = db.auth.onAuthStateChange((_event: string, session: { user: { id: string; email?: string } } | null) => {
       setCloudUser(session?.user.id || null);
       setCloudEmail(session?.user.email || "");
       if (!session) {
