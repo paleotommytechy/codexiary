@@ -89,9 +89,9 @@ function makeServer(account: Account) {
       title: "Connected Codexiary account",
       description: "Identify the Codexiary account linked to ChatGPT.",
       inputSchema: z.object({}),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
-      _meta: { "openai/profile": true },
+      _meta: { "openai/profile": true, securitySchemes: auth },
     },
     async () => ok({ id: account.id, email: account.email || null }),
   );
@@ -113,7 +113,7 @@ function makeServer(account: Account) {
         angle: z.string().max(1000).optional(),
         hook: z.string().max(500).optional(),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (input) => {
@@ -155,7 +155,7 @@ function makeServer(account: Account) {
         days: z.number().int().min(1).max(3650).optional(),
         limit: z.number().int().min(1).max(50).default(20),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ query, project, days, limit }) => {
@@ -186,7 +186,7 @@ function makeServer(account: Account) {
       inputSchema: z.object({
         days: z.number().int().min(1).max(31).default(7),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ days }) => {
@@ -229,7 +229,7 @@ function makeServer(account: Account) {
         tone: z.enum(["Reflective", "Technical", "Concise"]).default("Reflective"),
         entry_ids: z.array(z.string().max(100)).max(20).default([]),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ content, title, tone, entry_ids }) => {
@@ -261,7 +261,7 @@ function makeServer(account: Account) {
       inputSchema: z.object({
         limit: z.number().int().min(1).max(30).default(10),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ limit }) => {
@@ -286,7 +286,7 @@ function makeServer(account: Account) {
       title: "Get my personal writing voice",
       description: "Read writing preferences before creating a LinkedIn draft so it sounds like the user and avoids generic AI phrasing.",
       inputSchema: z.object({}),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => {
@@ -315,7 +315,7 @@ function makeServer(account: Account) {
       inputSchema: z.object({
         instructions: z.string().trim().min(10).max(4000),
       }),
-      securitySchemes: auth,
+      _meta: { securitySchemes: auth },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ instructions }) => {
