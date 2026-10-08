@@ -19,7 +19,7 @@ export default function LoginPage() {
   useEffect(() => {
     const client = getBrowserSupabase();
     if (!client) return;
-    client.auth.getUser().then(({ data }) => {
+    client.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       if (data.user) {
         const url = new URL(window.location.href);
         window.location.assign(safeRedirect(url.searchParams.get("redirect")));
