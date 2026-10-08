@@ -1199,8 +1199,8 @@ function CapturePage(props: CaptureProps) {
       <div className="privacy-note">
         <div className="privacy-dot" />
         <p>
-          V1 stores your journal in this browser. Nothing is sent to OpenAI unless
-          you add an API key to your deployment.
+          Notes stay in this browser unless you sign in for private cloud sync.
+          OpenAI API access remains optional for in-app generation.
         </p>
       </div>
     </section>
@@ -1573,7 +1573,7 @@ function SettingsPage({
           <div>
             <h3>GitHub integration</h3>
             <p>
-              Planned next: detect meaningful project activity and ask you for the
+              Coming later: detect meaningful project activity and ask you for the
               human story behind the code instead of turning every commit into a
               post.
             </p>
@@ -1589,7 +1589,7 @@ function SettingsPage({
             <h3>Local journal</h3>
             <p>
               {entries.length} {entries.length === 1 ? "entry" : "entries"} stored
-              in this browser. V1 does not yet sync across devices.
+              only in this browser. Cloud-synced entries will not be deleted here.
             </p>
             <button className="danger-button" onClick={clearData}>
               Clear local data
