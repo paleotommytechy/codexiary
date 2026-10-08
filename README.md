@@ -13,7 +13,7 @@ Codexiary is a personal developer journal and content operating system. It is de
 - A Content Radar that surfaces strong story signals from real entries.
 - An editable LinkedIn draft workbench with Reflective, Technical, and Concise modes.
 - Optional OpenAI enhancement with a fully usable local fallback.
-- Local-first storage in the browser for the first prototype.
+- Local-first storage in the browser, with optional private cloud sync and MCP connectivity.
 
 ## Run locally
 
@@ -75,3 +75,11 @@ Next.js + TypeScript
 ---
 
 Codexiary is being built as a personal tool first: a searchable record of what you build, learn, struggle with, and eventually know.
+
+## ChatGPT MCP and private cloud journal (V2)
+
+Codexiary now has an optional ChatGPT MCP bridge. ChatGPT can save structured work moments, retrieve recent journal entries, draft weekly LinkedIn ideas, and save post drafts **without an OpenAI API key**. The private cloud uses Supabase OAuth 2.1 with per-user row-level security.
+
+**[Full setup guide](docs/CHATGPT_MCP.md)** — includes the Supabase SQL migration, Vercel environment settings, OAuth 2.1 configuration and ChatGPT custom MCP plugin setup.
+
+This cannot automatically access every ChatGPT chat; you explicitly ask ChatGPT to save useful context from the current conversation. No automatic LinkedIn publishing is included.
