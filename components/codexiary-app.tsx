@@ -26,6 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getBrowserSupabase, isCloudConfigured } from "@/lib/supabase/browser";
 
 type View = "dashboard" | "capture" | "journal" | "content" | "settings";
 
@@ -42,6 +43,65 @@ type Entry = {
   hook: string;
   createdAt: string;
 };
+
+type CloudDraft = {
+  id: string;
+  title: string;
+  content: string;
+  tone: string;
+  status: string;
+  entry_ids: string[];
+  created_at: string;
+};
+
+type CloudJournalRow = {
+  id: string;
+  raw: string;
+  source: string;
+  project: string;
+  category: string;
+  topics: string[];
+  summary: string;
+  lesson: string;
+  angle: string;
+  hook: string;
+  created_at: string;
+};
+
+function rowToEntry(row: CloudJournalRow): Entry {
+  return {
+    id: row.id,
+    raw: row.raw,
+    source: row.source,
+    project: row.project,
+    category: row.category,
+    topics: row.topics,
+    summary: row.summary,
+    lesson: row.lesson,
+    angle: row.angle,
+    hook: row.hook,
+    createdAt: row.created_at,
+  };
+}
+
+function entryToRow(entry: Entry, userId: string) {
+  return {
+    id: entry.id,
+    user_id: userId,
+    raw: entry.raw,
+    source: entry.source,
+    project: entry.project,
+    category: entry.category,
+    topics: entry.topics,
+    summary: entry.summary,
+    lesson: entry.lesson,
+    angle: entry.angle,
+    hook: entry.hook,
+    created_at: entry.createdAt,
+  };
+}
+
+const DEFAULT_VOICE = "Write in first person, with thoughtful and clear language. Be specific and honest. Avoid generic hype, excessive emojis, invented results and corporate-sounding announcements.";
 
 type AIOrganizeResult = Pick<
   Entry,
@@ -222,6 +282,12 @@ async function callAI(payload: Record<string, unknown>) {
 export default function CodexiaryApp() {
   const [view, setView] = useState<View>("dashboard");
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [cloudEntries, setCloudEntries] = useState<Entry[]>([]);
+  const [cloudDrafts, setCloudDrafts] = useState<CloudDraft[]>([]);
+  const [cloudUser, setCloudUser] = useState<string | null>(null);
+  const [cloudEmail, setCloudEmail] = useState("");
+  const [cloudStatus, setCloudStatus] = useState("");
+  const [voiceInstructions, setVoiceInstructions] = useState(DEFAULT_VOICE);
   const [hydrated, setHydrated] = useState(false);
   const [raw, setRaw] = useState("");
   const [source, setSource] = useState("Project");
@@ -258,15 +324,115 @@ export default function CodexiaryApp() {
     return () => window.clearTimeout(t);
   }, [notice]);
 
+  const allEntries = useMemo(() => {
+    const ids = new Set(cloudEntries.map((entry) => entry.id));
+    return [...cloudEntries, ...entries.filter((entry) => !ids.has(entry.id))]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [entries, cloudEntries]);
+
+  useEffect(() => {
+    const db = getBrowserSupabase();
+    if (!db) return;
+    void db.auth.getUser().then(({ data }) => {
+      setCloudUser(data.user?.id || null);
+      setCloudEmail(data.user?.email || "");
+    });
+    const { data: listener } = db.auth.onAuthStateChange((_event, session) => {
+      setCloudUser(session?.user.id || null);
+      setCloudEmail(session?.user.email || "");
+      if (!session) {
+        setCloudEntries([]);
+        setCloudDrafts([]);
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  async function loadCloud(userId: string) {
+    const db = getBrowserSupabase();
+    if (!db) return;
+    setCloudStatus("Syncing...");
+    const [notes, drafts, voice] = await Promise.all([
+      db.from("journal_entries").select("*").eq("user_id", userId)
+        .order("created_at", { ascending: false }).limit(500),
+      db.from("content_drafts").select("*").eq("user_id", userId)
+        .order("created_at", { ascending: false }).limit(100),
+      db.from("voice_profiles").select("instructions").eq("user_id", userId).maybeSingle(),
+    ]);
+    if (notes.error || drafts.error || voice.error) {
+      setCloudStatus("Cloud sync failed. Check your Supabase setup.");
+      return;
+    }
+    setCloudEntries(((notes.data || []) as CloudJournalRow[]).map(rowToEntry));
+    setCloudDrafts((drafts.data || []) as CloudDraft[]);
+    setVoiceInstructions(voice.data?.instructions || DEFAULT_VOICE);
+    setCloudStatus("Up to date");
+  }
+
+  useEffect(() => {
+    if (cloudUser) void loadCloud(cloudUser);
+  }, [cloudUser, view]);
+
+  async function importLocalJournal() {
+    const db = getBrowserSupabase();
+    if (!db || !cloudUser || entries.length === 0) return;
+    setCloudStatus("Importing...");
+    const { error } = await db.from("journal_entries")
+      .upsert(entries.map((entry) => entryToRow(entry, cloudUser)), { onConflict: "id" });
+    if (error) {
+      setCloudStatus("Import failed: " + error.message);
+      return;
+    }
+    setEntries([]);
+    await loadCloud(cloudUser);
+    setNotice("Your local notes are now in your private cloud journal.");
+  }
+
+  async function saveVoiceProfile() {
+    const db = getBrowserSupabase();
+    if (!db || !cloudUser) return;
+    const { error } = await db.from("voice_profiles").upsert({
+      user_id: cloudUser,
+      instructions: voiceInstructions,
+      updated_at: new Date().toISOString(),
+    });
+    setNotice(error ? "Could not save voice preferences." : "Voice preferences saved.");
+  }
+
+  async function saveDraftToCloud() {
+    const db = getBrowserSupabase();
+    if (!db || !cloudUser || !draft.trim()) return;
+    const { error } = await db.from("content_drafts").insert({
+      user_id: cloudUser,
+      content: draft,
+      title: activeEntry?.hook || "My LinkedIn draft",
+      tone,
+      entry_ids: activeEntry ? [activeEntry.id] : [],
+    });
+    if (error) {
+      setNotice("Draft save failed.");
+      return;
+    }
+    await loadCloud(cloudUser);
+    setNotice("Draft saved to Codexiary.");
+  }
+
+  function openSavedDraft(item: CloudDraft) {
+    setActiveEntry(null);
+    setDraft(item.content);
+    setTone(["Reflective", "Technical", "Concise"].includes(item.tone) ? item.tone : "Reflective");
+    setView("content");
+  }
+
   const weekEntries = useMemo(() => {
     const sevenDays = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return entries.filter((entry) => new Date(entry.createdAt).getTime() >= sevenDays);
-  }, [entries]);
+    return allEntries.filter((entry) => new Date(entry.createdAt).getTime() >= sevenDays);
+  }, [allEntries]);
 
   const filteredEntries = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return entries;
-    return entries.filter((entry) =>
+    if (!q) return allEntries;
+    return allEntries.filter((entry) =>
       [
         entry.raw,
         entry.summary,
@@ -279,11 +445,11 @@ export default function CodexiaryApp() {
         .toLowerCase()
         .includes(q),
     );
-  }, [entries, search]);
+  }, [allEntries, search]);
 
   const contentIdeas = useMemo(
     () =>
-      entries
+      allEntries
         .map((entry) => ({
           entry,
           score: Math.min(
@@ -294,7 +460,7 @@ export default function CodexiaryApp() {
           ),
         }))
         .sort((a, b) => b.score - a.score),
-    [entries],
+    [allEntries],
   );
 
   async function saveCapture() {
@@ -332,6 +498,18 @@ export default function CodexiaryApp() {
     };
 
     setEntries((current) => [entry, ...current]);
+
+    // Cloud writes are performed with the signed-in user's RLS identity.
+    const db = getBrowserSupabase();
+    if (db && cloudUser) {
+      const { error } = await db.from("journal_entries").insert(entryToRow(entry, cloudUser));
+      if (!error) {
+        setCloudEntries((current) => [entry, ...current]);
+        setEntries((current) => current.filter((item) => item.id !== entry.id));
+      } else {
+        setNotice("Saved locally. Cloud sync failed.");
+      }
+    }
     setRaw("");
     setProject("");
     setSaving(false);
@@ -364,7 +542,17 @@ export default function CodexiaryApp() {
     setNotice("Draft copied to clipboard.");
   }
 
-  function deleteEntry(id: string) {
+  async function deleteEntry(id: string) {
+    if (cloudEntries.some((entry) => entry.id === id)) {
+      const db = getBrowserSupabase();
+      if (!db || !cloudUser) return;
+      const { error } = await db.from("journal_entries").delete().eq("id", id).eq("user_id", cloudUser);
+      if (error) {
+        setNotice("Cloud deletion failed.");
+        return;
+      }
+      setCloudEntries((current) => current.filter((entry) => entry.id !== id));
+    }
     setEntries((current) => current.filter((entry) => entry.id !== id));
     if (activeEntry?.id === id) {
       setActiveEntry(null);
@@ -379,7 +567,7 @@ export default function CodexiaryApp() {
     setActiveEntry(null);
     setDraft("");
     localStorage.removeItem(STORAGE_KEY);
-    setNotice("Local journal cleared.");
+    setNotice("Local-only journal cleared. Cloud notes were not deleted.");
   }
 
   function startVoice() {
@@ -525,7 +713,7 @@ export default function CodexiaryApp() {
         <div className="page">
           {view === "dashboard" && (
             <Dashboard
-              entries={entries}
+              entries={allEntries}
               weekEntries={weekEntries}
               contentIdeas={contentIdeas}
               raw={raw}
@@ -582,11 +770,28 @@ export default function CodexiaryApp() {
               drafting={drafting}
               makeDraft={makeDraft}
               copyDraft={copyDraft}
+              savedDrafts={cloudDrafts}
+              onSelectSavedDraft={openSavedDraft}
+              saveDraftToCloud={saveDraftToCloud}
+              cloudConnected={Boolean(cloudUser)}
             />
           )}
 
           {view === "settings" && (
-            <SettingsPage clearData={clearData} entries={entries} />
+            <SettingsPage
+              clearData={clearData}
+              entries={entries}
+              cloudConfigured={isCloudConfigured()}
+              cloudEmail={cloudEmail}
+              cloudConnected={Boolean(cloudUser)}
+              cloudStatus={cloudStatus}
+              importLocalJournal={importLocalJournal}
+              refreshCloud={() => cloudUser && loadCloud(cloudUser)}
+              voiceInstructions={voiceInstructions}
+              setVoiceInstructions={setVoiceInstructions}
+              saveVoiceProfile={saveVoiceProfile}
+              signOut={async () => { await getBrowserSupabase()?.auth.signOut(); }}
+            />
           )}
         </div>
       </section>
@@ -1126,6 +1331,10 @@ function ContentStudio({
   drafting,
   makeDraft,
   copyDraft,
+  savedDrafts,
+  onSelectSavedDraft,
+  saveDraftToCloud,
+  cloudConnected,
 }: {
   ideas: { entry: Entry; score: number }[];
   tone: string;
@@ -1136,6 +1345,10 @@ function ContentStudio({
   drafting: boolean;
   makeDraft: (entry: Entry, toneOverride?: string) => void;
   copyDraft: () => void;
+  savedDrafts: CloudDraft[];
+  onSelectSavedDraft: (draft: CloudDraft) => void;
+  saveDraftToCloud: () => void;
+  cloudConnected: boolean;
 }) {
   return (
     <section>
@@ -1152,6 +1365,18 @@ function ContentStudio({
 
       <div className="studio-grid">
         <div className="ideas-column">
+          {cloudConnected && (
+            <div className="saved-drafts">
+              <div className="studio-label"><span>Saved drafts from ChatGPT</span><small>{savedDrafts.length}</small></div>
+              {savedDrafts.length ? savedDrafts.slice(0, 8).map((item) => (
+                <button key={item.id} className="saved-draft-item" onClick={() => onSelectSavedDraft(item)}>
+                  <FileText size={16} />
+                  <span>{item.title || item.content.slice(0, 75)}</span>
+                  <ChevronRight size={15} />
+                </button>
+              )) : <p className="sync-muted">Drafts saved through ChatGPT will appear here.</p>}
+            </div>
+          )}
           <div className="studio-label">
             <span>Story signals</span>
             <small>{ideas.length} found</small>
@@ -1237,6 +1462,9 @@ function ContentStudio({
               />
               <div className="draft-footer">
                 <span>{draft.length} characters</span>
+                {cloudConnected && <button className="secondary-button" onClick={saveDraftToCloud}>
+                  <BookOpen size={15} /> Save draft
+                </button>}
                 <button className="primary-button" onClick={copyDraft}>
                   <Clipboard size={15} /> Copy for LinkedIn
                 </button>
@@ -1263,9 +1491,29 @@ function ContentStudio({
 function SettingsPage({
   clearData,
   entries,
+  cloudConfigured,
+  cloudEmail,
+  cloudConnected,
+  cloudStatus,
+  importLocalJournal,
+  refreshCloud,
+  voiceInstructions,
+  setVoiceInstructions,
+  saveVoiceProfile,
+  signOut,
 }: {
   clearData: () => void;
   entries: Entry[];
+  cloudConfigured: boolean;
+  cloudEmail: string;
+  cloudConnected: boolean;
+  cloudStatus: string;
+  importLocalJournal: () => void;
+  refreshCloud: () => void;
+  voiceInstructions: string;
+  setVoiceInstructions: (value: string) => void;
+  saveVoiceProfile: () => void;
+  signOut: () => void;
 }) {
   return (
     <section>
@@ -1277,6 +1525,31 @@ function SettingsPage({
         </div>
       </div>
 
+      <div className="panel cloud-panel">
+        <div className="setting-icon"><Github size={20} /></div>
+        <div className="cloud-panel-content">
+          <h3>ChatGPT connection and private cloud journal</h3>
+          <p>{!cloudConfigured ? "Cloud sync isn't configured yet. The local journal still works." :
+            cloudConnected ? `Connected as ${cloudEmail || "your account"}. ${cloudStatus}` :
+            "Sign in to connect ChatGPT to a private Supabase journal. Your local notes remain unchanged."}</p>
+          <div className="cloud-actions">
+            {cloudConfigured && !cloudConnected && <a className="primary-button" href="/login">Sign in to cloud</a>}
+            {cloudConnected && <>
+              <button className="secondary-button" onClick={refreshCloud}>Refresh from ChatGPT</button>
+              <button className="secondary-button" onClick={importLocalJournal} disabled={!entries.length}>Import {entries.length} local notes</button>
+              <button className="secondary-button" onClick={signOut}>Sign out</button>
+            </>}
+            <a href="/mcp-guide" className="secondary-button">Connection guide <ArrowRight size={15}/></a>
+          </div>
+          {cloudConnected && (
+            <div className="voice-settings">
+              <label htmlFor="voice-profile">Your LinkedIn writing voice</label>
+              <textarea id="voice-profile" rows={4} value={voiceInstructions} onChange={(event) => setVoiceInstructions(event.target.value)} />
+              <button className="primary-button" onClick={saveVoiceProfile}>Save writing voice</button>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="settings-grid">
         <div className="panel setting-card">
           <div className="setting-icon">
