@@ -26,7 +26,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getBrowserSupabase, isCloudConfigured } from "@/lib/supabase/browser";
+import { useCodexiaryCloud, type CloudController, type CloudDraft } from "@/components/convex-cloud";
 
 type View = "dashboard" | "capture" | "journal" | "content" | "settings";
 
@@ -42,64 +42,8 @@ type Entry = {
   angle: string;
   hook: string;
   createdAt: string;
+  cloudId?: string;
 };
-
-type CloudDraft = {
-  id: string;
-  title: string;
-  content: string;
-  tone: string;
-  status: string;
-  entry_ids: string[];
-  created_at: string;
-};
-
-type CloudJournalRow = {
-  id: string;
-  raw: string;
-  source: string;
-  project: string;
-  category: string;
-  topics: string[];
-  summary: string;
-  lesson: string;
-  angle: string;
-  hook: string;
-  created_at: string;
-};
-
-function rowToEntry(row: CloudJournalRow): Entry {
-  return {
-    id: row.id,
-    raw: row.raw,
-    source: row.source,
-    project: row.project,
-    category: row.category,
-    topics: row.topics,
-    summary: row.summary,
-    lesson: row.lesson,
-    angle: row.angle,
-    hook: row.hook,
-    createdAt: row.created_at,
-  };
-}
-
-function entryToRow(entry: Entry, userId: string) {
-  return {
-    id: entry.id,
-    user_id: userId,
-    raw: entry.raw,
-    source: entry.source,
-    project: entry.project,
-    category: entry.category,
-    topics: entry.topics,
-    summary: entry.summary,
-    lesson: entry.lesson,
-    angle: entry.angle,
-    hook: entry.hook,
-    created_at: entry.createdAt,
-  };
-}
 
 const DEFAULT_VOICE = "Write in first person, with thoughtful and clear language. Be specific and honest. Avoid generic hype, excessive emojis, invented results and corporate-sounding announcements.";
 
@@ -279,14 +223,22 @@ async function callAI(payload: Record<string, unknown>) {
   return response.json();
 }
 
+const CLOUD_CONFIGURED = Boolean(
+  process.env.NEXT_PUBLIC_CONVEX_URL && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+);
+
 export default function CodexiaryApp() {
+  return CLOUD_CONFIGURED ? <CloudConnectedApp /> : <CodexiaryCore cloud={null} />;
+}
+
+function CloudConnectedApp() {
+  const cloud = useCodexiaryCloud();
+  return <CodexiaryCore cloud={cloud} />;
+}
+
+function CodexiaryCore({ cloud }: { cloud: CloudController | null }) {
   const [view, setView] = useState<View>("dashboard");
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [cloudEntries, setCloudEntries] = useState<Entry[]>([]);
-  const [cloudDrafts, setCloudDrafts] = useState<CloudDraft[]>([]);
-  const [cloudUser, setCloudUser] = useState<string | null>(null);
-  const [cloudEmail, setCloudEmail] = useState("");
-  const [cloudStatus, setCloudStatus] = useState("");
   const [voiceInstructions, setVoiceInstructions] = useState(DEFAULT_VOICE);
   const [hydrated, setHydrated] = useState(false);
   const [raw, setRaw] = useState("");
@@ -324,97 +276,57 @@ export default function CodexiaryApp() {
     return () => window.clearTimeout(t);
   }, [notice]);
 
+  const cloudEntries = cloud?.entries || [];
+  const cloudDrafts = cloud?.drafts || [];
+  const cloudUser = cloud?.connected ?? false;
+  const cloudEmail = cloud?.email || "";
+  const cloudStatus = cloud?.status || "Local mode";
+
+  useEffect(() => {
+    if (cloud?.voice) setVoiceInstructions(cloud.voice);
+  }, [cloud?.voice]);
+
   const allEntries = useMemo(() => {
     const ids = new Set(cloudEntries.map((entry) => entry.id));
     return [...cloudEntries, ...entries.filter((entry) => !ids.has(entry.id))]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [entries, cloudEntries]);
 
-  useEffect(() => {
-    const db = getBrowserSupabase();
-    if (!db) return;
-    void db.auth.getUser().then(({ data }: { data: { user: { id: string; email?: string } | null } }) => {
-      setCloudUser(data.user?.id || null);
-      setCloudEmail(data.user?.email || "");
-    });
-    const { data: listener } = db.auth.onAuthStateChange((_event: string, session: { user: { id: string; email?: string } } | null) => {
-      setCloudUser(session?.user.id || null);
-      setCloudEmail(session?.user.email || "");
-      if (!session) {
-        setCloudEntries([]);
-        setCloudDrafts([]);
-      }
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  async function loadCloud(userId: string) {
-    const db = getBrowserSupabase();
-    if (!db) return;
-    setCloudStatus("Syncing...");
-    const [notes, drafts, voice] = await Promise.all([
-      db.from("journal_entries").select("*").eq("user_id", userId)
-        .order("created_at", { ascending: false }).limit(500),
-      db.from("content_drafts").select("*").eq("user_id", userId)
-        .order("created_at", { ascending: false }).limit(100),
-      db.from("voice_profiles").select("instructions").eq("user_id", userId).maybeSingle(),
-    ]);
-    if (notes.error || drafts.error || voice.error) {
-      setCloudStatus("Cloud sync failed. Check your Supabase setup.");
-      return;
-    }
-    setCloudEntries(((notes.data || []) as CloudJournalRow[]).map(rowToEntry));
-    setCloudDrafts((drafts.data || []) as CloudDraft[]);
-    setVoiceInstructions(voice.data?.instructions || DEFAULT_VOICE);
-    setCloudStatus("Up to date");
-  }
-
-  useEffect(() => {
-    if (cloudUser) void loadCloud(cloudUser);
-  }, [cloudUser, view]);
-
   async function importLocalJournal() {
-    const db = getBrowserSupabase();
-    if (!db || !cloudUser || entries.length === 0) return;
-    setCloudStatus("Importing...");
-    const { error } = await db.from("journal_entries")
-      .upsert(entries.map((entry) => entryToRow(entry, cloudUser)), { onConflict: "id" });
-    if (error) {
-      setCloudStatus("Import failed: " + error.message);
-      return;
+    if (!cloud || !cloud.connected || !entries.length) return;
+    setNotice("Importing notes...");
+    try {
+      await cloud.importEntries(entries);
+      setEntries([]);
+      setNotice("Your local journal was imported to Convex.");
+    } catch {
+      setNotice("Import failed. Your local notes are still safe.");
     }
-    setEntries([]);
-    await loadCloud(cloudUser);
-    setNotice("Your local notes are now in your private cloud journal.");
   }
 
   async function saveVoiceProfile() {
-    const db = getBrowserSupabase();
-    if (!db || !cloudUser) return;
-    const { error } = await db.from("voice_profiles").upsert({
-      user_id: cloudUser,
-      instructions: voiceInstructions,
-      updated_at: new Date().toISOString(),
-    });
-    setNotice(error ? "Could not save voice preferences." : "Voice preferences saved.");
+    if (!cloud?.connected) return;
+    try {
+      await cloud.saveVoice(voiceInstructions);
+      setNotice("Writing preferences saved.");
+    } catch {
+      setNotice("Couldn't save writing preferences.");
+    }
   }
 
   async function saveDraftToCloud() {
-    const db = getBrowserSupabase();
-    if (!db || !cloudUser || !draft.trim()) return;
-    const { error } = await db.from("content_drafts").insert({
-      user_id: cloudUser,
-      content: draft,
-      title: activeEntry?.hook || "My LinkedIn draft",
-      tone,
-      entry_ids: activeEntry ? [activeEntry.id] : [],
-    });
-    if (error) {
+    if (!cloud?.connected || !draft.trim()) return;
+    try {
+      await cloud.saveDraft({
+        content: draft,
+        title: activeEntry?.hook || "My LinkedIn draft",
+        tone,
+        entryIds: activeEntry ? [activeEntry.id] : [],
+      });
+      setNotice("Draft saved to Convex.");
+    } catch {
       setNotice("Draft save failed.");
-      return;
     }
-    await loadCloud(cloudUser);
-    setNotice("Draft saved to Codexiary.");
   }
 
   function openSavedDraft(item: CloudDraft) {
@@ -499,15 +411,12 @@ export default function CodexiaryApp() {
 
     setEntries((current) => [entry, ...current]);
 
-    // Cloud writes are performed with the signed-in user's RLS identity.
-    const db = getBrowserSupabase();
-    if (db && cloudUser) {
-      const { error } = await db.from("journal_entries").insert(entryToRow(entry, cloudUser));
-      if (!error) {
-        setCloudEntries((current) => [entry, ...current]);
+    if (cloud?.connected) {
+      try {
+        await cloud.create(entry);
         setEntries((current) => current.filter((item) => item.id !== entry.id));
-      } else {
-        setNotice("Saved locally. Cloud sync failed.");
+      } catch {
+        setNotice("Saved locally; Convex sync failed.");
       }
     }
     setRaw("");
@@ -543,15 +452,15 @@ export default function CodexiaryApp() {
   }
 
   async function deleteEntry(id: string) {
-    if (cloudEntries.some((entry) => entry.id === id)) {
-      const db = getBrowserSupabase();
-      if (!db || !cloudUser) return;
-      const { error } = await db.from("journal_entries").delete().eq("id", id).eq("user_id", cloudUser);
-      if (error) {
-        setNotice("Cloud deletion failed.");
+    const cloudEntry = cloudEntries.find((entry) => entry.id === id);
+    if (cloudEntry?.cloudId) {
+      if (!cloud?.connected) return;
+      try {
+        await cloud.remove(cloudEntry.cloudId);
+      } catch {
+        setNotice("Could not delete cloud entry.");
         return;
       }
-      setCloudEntries((current) => current.filter((entry) => entry.id !== id));
     }
     setEntries((current) => current.filter((entry) => entry.id !== id));
     if (activeEntry?.id === id) {
@@ -781,16 +690,15 @@ export default function CodexiaryApp() {
             <SettingsPage
               clearData={clearData}
               entries={entries}
-              cloudConfigured={isCloudConfigured()}
+              cloudConfigured={CLOUD_CONFIGURED}
               cloudEmail={cloudEmail}
               cloudConnected={Boolean(cloudUser)}
               cloudStatus={cloudStatus}
               importLocalJournal={importLocalJournal}
-              refreshCloud={() => cloudUser && loadCloud(cloudUser)}
               voiceInstructions={voiceInstructions}
               setVoiceInstructions={setVoiceInstructions}
               saveVoiceProfile={saveVoiceProfile}
-              signOut={async () => { await getBrowserSupabase()?.auth.signOut(); }}
+              signOut={async () => { await cloud?.signOut(); }}
             />
           )}
         </div>
@@ -1496,7 +1404,6 @@ function SettingsPage({
   cloudConnected,
   cloudStatus,
   importLocalJournal,
-  refreshCloud,
   voiceInstructions,
   setVoiceInstructions,
   saveVoiceProfile,
@@ -1509,7 +1416,6 @@ function SettingsPage({
   cloudConnected: boolean;
   cloudStatus: string;
   importLocalJournal: () => void;
-  refreshCloud: () => void;
   voiceInstructions: string;
   setVoiceInstructions: (value: string) => void;
   saveVoiceProfile: () => void;
@@ -1531,11 +1437,11 @@ function SettingsPage({
           <h3>ChatGPT connection and private cloud journal</h3>
           <p>{!cloudConfigured ? "Cloud sync isn't configured yet. The local journal still works." :
             cloudConnected ? `Connected as ${cloudEmail || "your account"}. ${cloudStatus}` :
-            "Sign in to connect ChatGPT to a private Supabase journal. Your local notes remain unchanged."}</p>
+            "Sign in to connect ChatGPT to your private Convex journal. Your local notes remain unchanged."}</p>
           <div className="cloud-actions">
             {cloudConfigured && !cloudConnected && <a className="primary-button" href="/login">Sign in to cloud</a>}
             {cloudConnected && <>
-              <button className="secondary-button" onClick={refreshCloud}>Refresh from ChatGPT</button>
+              <span className="status-pill">Live sync is active</span>
               <button className="secondary-button" onClick={importLocalJournal} disabled={!entries.length}>Import {entries.length} local notes</button>
               <button className="secondary-button" onClick={signOut}>Sign out</button>
             </>}
@@ -1607,7 +1513,7 @@ function SettingsPage({
           <RoadmapStep
             number="01"
             title="Persistent account + cloud journal"
-            text="Move browser-only entries into Convex or Supabase and add authentication."
+            text="Cloud journal and account authentication via Convex + Clerk."
           />
           <RoadmapStep
             number="02"
