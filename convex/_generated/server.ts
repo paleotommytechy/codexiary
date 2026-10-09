@@ -1,12 +1,24 @@
 /*
- * Bootstrap shim for first-time CI builds.
- * Run npx convex dev --once against the existing Codexiary deployment;
- * Convex will replace this file with its generated, schema-aware version.
+ * CI-friendly bootstrap: typed against the committed schema.
+ * The Convex CLI regenerates this directory for the linked deployment.
  */
-export {
-  queryGeneric as query,
-  mutationGeneric as mutation,
-  internalMutationGeneric as internalMutation,
-  internalQueryGeneric as internalQuery,
-  actionGeneric as action,
+import {
+  queryGeneric,
+  mutationGeneric,
+  internalQueryGeneric,
+  internalMutationGeneric,
+  actionGeneric,
+  type QueryBuilder,
+  type MutationBuilder,
+  type ActionBuilder,
+  type DataModelFromSchemaDefinition,
 } from "convex/server";
+import schema from "../schema";
+
+type DataModel = DataModelFromSchemaDefinition<typeof schema>;
+
+export const query = queryGeneric as QueryBuilder<DataModel, "public">;
+export const mutation = mutationGeneric as MutationBuilder<DataModel, "public">;
+export const internalQuery = internalQueryGeneric as QueryBuilder<DataModel, "internal">;
+export const internalMutation = internalMutationGeneric as MutationBuilder<DataModel, "internal">;
+export const action = actionGeneric as ActionBuilder<DataModel, "public">;
