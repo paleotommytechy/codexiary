@@ -13,7 +13,7 @@ Codexiary is a personal developer journal and content operating system. It is de
 - A Content Radar that surfaces strong story signals from real entries.
 - An editable LinkedIn draft workbench with Reflective, Technical, and Concise modes.
 - Optional OpenAI enhancement with a fully usable local fallback.
-- Local-first storage in the browser, with optional private cloud sync and MCP connectivity.
+- Local-first storage in the browser, with optional Convex cloud sync and MCP connectivity.
 
 ## Run locally
 
@@ -76,10 +76,16 @@ Next.js + TypeScript
 
 Codexiary is being built as a personal tool first: a searchable record of what you build, learn, struggle with, and eventually know.
 
-## ChatGPT MCP and private cloud journal (V2)
+## ChatGPT ↔ Codexiary, powered by Convex
 
-Codexiary now has an optional ChatGPT MCP bridge. ChatGPT can save structured work moments, retrieve recent journal entries, draft weekly LinkedIn ideas, and save post drafts **without an OpenAI API key**. The private cloud uses Supabase OAuth 2.1 with per-user row-level security.
+Codexiary now supports **your existing Convex project** as an optional cloud backend. It uses Clerk only for login and ChatGPT OAuth 2.1, while keeping your private work notes, post drafts and writing preferences in Convex.
 
-**[Full setup guide](docs/CHATGPT_MCP.md)** — includes the Supabase SQL migration, Vercel environment settings, OAuth 2.1 configuration and ChatGPT custom MCP plugin setup.
+- Sign in and sync captured work from the browser.
+- Save lessons straight from ChatGPT via a custom OAuth-authenticated MCP server.
+- Search moments, review the week, and save LinkedIn drafts without an OpenAI API key.
+- Keep using the local-only journal if cloud configuration isn't complete.
+- Import existing local entries explicitly; nothing is migrated silently.
 
-This cannot automatically access every ChatGPT chat; you explicitly ask ChatGPT to save useful context from the current conversation. No automatic LinkedIn publishing is included.
+**Setup guide:** [docs/CONVEX_MCP.md](docs/CONVEX_MCP.md).
+
+**External setup is required:** Link this repo to the existing deployment, deploy Convex functions, configure Clerk credentials and the service secret, then redeploy on Vercel. This repo cannot configure your dashboard on its own.
