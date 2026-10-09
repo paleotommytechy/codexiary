@@ -19,8 +19,8 @@
     "typescript": "^5.7.0",
     "zod": "^4.0.0",
     "convex": "^1.30.0",
-    "@clerk/nextjs": "^6.35.0",
-    "@clerk/mcp-tools": "latest",
+    "@clerk/nextjs": "^7.9.13",
+    "@clerk/mcp-tools": "^0.6.0",
     "mcp-handler": "latest"
   },
   "devDependencies": {}
