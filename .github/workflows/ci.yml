@@ -1,27 +1,46 @@
 name: Build check
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
 permissions:
   contents: read
-
+  issues: write
+  pull-requests: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Install
-        run: npm install
+        id: install
+        continue-on-error: true
+        run: npm install > npm-report.txt 2>&1
       - name: Type check
-        run: npm run lint
+        id: typecheck
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        run: npm run lint > ts-report.txt 2>&1
+      - name: Post diagnosis to migration PR
+        if: steps.install.outcome == 'failure' || steps.typecheck.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs=require('fs');
+            let report='';
+            for(const f of ['npm-report.txt','ts-report.txt']){
+              if(fs.existsSync(f)) report+= f + '\n' + fs.readFileSync(f,'utf8').slice(-40000) + '\n';
+            }
+            await github.rest.issues.createComment({
+              owner:context.repo.owner,repo:context.repo.repo,issue_number:2,
+              body:'Temporary migration diagnostics:\n\n```text\n'+report+'\n```'
+            });
+      - name: Fail check
+        if: steps.install.outcome == 'failure' || steps.typecheck.outcome == 'failure'
+        run: exit 1
       - name: Build
         run: npm run build
