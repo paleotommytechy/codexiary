@@ -16,8 +16,8 @@ function backend() {
   return { client: new ConvexHttpClient(url), secret };
 }
 
-function ownerFromContext(context: { authInfo?: { extra?: Record<string, unknown> } }) {
-  const ownerId = context.authInfo?.extra?.userId;
+function ownerFromContext(context: { http?: { authInfo?: { extra?: Record<string, unknown> } } }) {
+  const ownerId = context.http?.authInfo?.extra?.userId;
   if (typeof ownerId !== "string" || !ownerId)
     throw new Error("A verified Clerk OAuth user is required.");
   return ownerId;
